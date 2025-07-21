@@ -1,6 +1,6 @@
-mysql -h DBHOOST -u user_000 -p
+mysql -h DBHOOST -u user_00 -p
 
-pw_000
+pw_00
 
-use db_000;
+use db_00;
 drop table notes;

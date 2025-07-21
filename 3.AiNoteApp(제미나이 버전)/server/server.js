@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const mysql = require("mysql");
-const OpenAI = require("openai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const cors = require("cors");
 
 const app = express();
@@ -14,14 +14,15 @@ app.use(express.json());
 // 데이터베이스 연결 상태를 저장할 변수
 let dbConnection = null;
 
-// OpenAI 설정
-const configureOpenAI = () => {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.error("OpenAI API 키가 설정되지 않았습니다.");
+// Gemini AI 설정
+const configureGemini = () => {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    console.error("Gemini API 키가 설정되지 않았습니다.");
     return null;
   }
-  return new OpenAI({ apiKey: openaiKey });
+  const genAI = new GoogleGenerativeAI(geminiKey);
+  return genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 };
 
 // 데이터베이스 연결 함수
@@ -70,7 +71,7 @@ const connectToDatabase = () => {
   }
 };
 
-// notes 테이블 생성 함수
+// notes 테이블 생성 함수 (gemini로 변경)
 const createNotesTable = (connection) => {
   return new Promise((resolve, reject) => {
     const createTableQuery = `
@@ -78,7 +79,7 @@ const createNotesTable = (connection) => {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_note TEXT NOT NULL,
                 ai_note TEXT,
-                ai_type ENUM('gpt', 'claude') DEFAULT NULL,
+                ai_type ENUM('gpt', 'claude', 'gemini') DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
@@ -108,11 +109,11 @@ const checkDbConnection = (req, res, next) => {
   next();
 };
 
-// OpenAI 설정 체크 미들웨어
-const checkOpenAIConfig = (req, res, next) => {
-  if (!openai) {
+// Gemini AI 설정 체크 미들웨어
+const checkGeminiConfig = (req, res, next) => {
+  if (!geminiModel) {
     return res.status(503).json({
-      error: "OpenAI API 설정 실패",
+      error: "Gemini AI 설정 실패",
       message:
         "AI 서비스를 현재 사용할 수 없습니다. 잠시 후 다시 시도해주세요.",
     });
@@ -120,8 +121,8 @@ const checkOpenAIConfig = (req, res, next) => {
   next();
 };
 
-// OpenAI 초기화
-const openai = configureOpenAI();
+// Gemini 초기화
+const geminiModel = configureGemini();
 
 // 기본 경로
 app.get("/", (req, res) => {
@@ -129,13 +130,13 @@ app.get("/", (req, res) => {
     message: "서버 실행 중",
     status: {
       database: dbConnection ? "연결됨" : "연결 안됨",
-      openai: openai ? "설정됨" : "설정 안됨",
+      gemini: geminiModel ? "설정됨" : "설정 안됨",
     },
   });
 });
 
-// 메모 추가 및 ChatGPT 분석
-app.post("/notes", checkDbConnection, checkOpenAIConfig, async (req, res) => {
+// 메모 추가 및 Gemini 분석
+app.post("/notes", checkDbConnection, checkGeminiConfig, async (req, res) => {
   const userMessage = req.body.content;
 
   if (!userMessage?.trim()) {
@@ -143,21 +144,19 @@ app.post("/notes", checkDbConnection, checkOpenAIConfig, async (req, res) => {
   }
 
   try {
-    const completion = await openai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert in AWS. Based on the data provided by the user, suggest one AWS service that the user can additionally learn. Ensure the response is at least three sentences long and in Korean.",
-        },
-        { role: "user", content: userMessage },
-      ],
-      model: "gpt-3.5-turbo",
-      max_tokens: 1000,
-    });
+    const prompt = `당신은 AWS 전문가입니다. 사용자가 제공한 데이터를 바탕으로 추가로 학습할 수 있는 AWS 서비스 하나를 제안해주세요. 응답은 최소 3문장 이상이어야 하며 한국어로 작성해주세요.
 
-    const aiNote = completion.choices[0].message.content;
-    const note = { user_note: userMessage, ai_note: aiNote };
+사용자 입력: ${userMessage}`;
+
+    const result = await geminiModel.generateContent(prompt);
+    const response = await result.response;
+    const aiNote = response.text();
+
+    const note = { 
+      user_note: userMessage, 
+      ai_note: aiNote,
+      ai_type: 'gemini'
+    };
 
     const sql = "INSERT INTO notes SET ?";
     dbConnection.query(sql, note, (err, result) => {
@@ -171,7 +170,7 @@ app.post("/notes", checkDbConnection, checkOpenAIConfig, async (req, res) => {
       });
     });
   } catch (error) {
-    console.error("AI API 호출 중 오류:", error);
+    console.error("Gemini AI API 호출 중 오류:", error);
     res.status(500).json({ error: "AI 서비스 응답 실패" });
   }
 });
@@ -232,7 +231,7 @@ const startServer = async () => {
       console.log("\n=== 서버 상태 ===");
       console.log(`포트: ${port}`);
       console.log(`데이터베이스 연결: ${dbConnection ? "성공 ✅" : "실패 ❌"}`);
-      console.log(`OpenAI 설정: ${openai ? "성공 ✅" : "실패 ❌"}`);
+      console.log(`Gemini AI 설정: ${geminiModel ? "성공 ✅" : "실패 ❌"}`);
       console.log("=================\n");
     });
   } catch (error) {

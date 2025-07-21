@@ -64,6 +64,7 @@ function App() {
     }
   };
 
+  // 💡 수정 필요: requestAIAdvice 함수가 있다면 이 부분의 엔드포인트도 확인 필요
   const requestAIAdvice = async (userNote) => {
     try {
       await fetch(`${SERVER_URL}/ainotes`, {
@@ -120,7 +121,9 @@ function App() {
                 </div>
                 {note.ai_note && (
                   <div className="ai-note">
-                    <strong>🤖 AI 추천 학습:</strong>
+                    <strong>
+                      {note.ai_type === 'gemini' ? '🤖 AI 추천 학습:' : '🤖 AI 추천 학습:'}
+                    </strong>
                     <p>{note.ai_note}</p>
                   </div>
                 )}
@@ -130,7 +133,7 @@ function App() {
                       onClick={() => requestAIAdvice(note.user_note)}
                       className="secondary-button"
                     >
-                      AI 조언 요청
+                      Gemini 조언 요청
                     </button>
                   )}
                   <button 

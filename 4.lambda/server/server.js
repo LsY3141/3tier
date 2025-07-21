@@ -58,7 +58,7 @@ const connectToDatabase = () => {
     }
 };
 
-// notes 테이블 생성 함수
+// notes 테이블 생성 함수 (gemini 추가)
 const createNotesTable = (connection) => {
     return new Promise((resolve, reject) => {
         const createTableQuery = `
@@ -66,7 +66,7 @@ const createNotesTable = (connection) => {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_note TEXT NOT NULL,
                 ai_note TEXT,
-                ai_type ENUM('gpt', 'claude') DEFAULT NULL,
+                ai_type ENUM('gpt', 'claude', 'gemini') DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
@@ -95,21 +95,21 @@ const checkDbConnection = (req, res, next) => {
     next();
 };
 
-// GPT Lambda 호출 함수
-const callGPTLambda = async (content, noteId) => {
-  if (!process.env.GPT_LAMBDA_URL) {
-      throw new Error('GPT Lambda URL이 설정되지 않았습니다');
+// Gemini Lambda 호출 함수 (GPT에서 변경)
+const callGeminiLambda = async (content, noteId) => {
+  if (!process.env.GEMINI_LAMBDA_URL) {
+      throw new Error('Gemini Lambda URL이 설정되지 않았습니다');
   }
 
   try {
-      const response = await axios.post(process.env.GPT_LAMBDA_URL, { 
+      const response = await axios.post(process.env.GEMINI_LAMBDA_URL, { 
           content,
           noteId 
       });
       return response.data;
   } catch (error) {
-      console.error('GPT Lambda 호출 중 오류:', error);
-      throw new Error('GPT 서비스 호출 실패');
+      console.error('Gemini Lambda 호출 중 오류:', error);
+      throw new Error('Gemini 서비스 호출 실패');
   }
 };
 
@@ -130,13 +130,14 @@ const callClaudeLambda = async (content, noteId) => {
       throw new Error('Claude 서비스 호출 실패');
   }
 };
-// 기본 경로
+
+// 기본 경로 (상태 표시 변경)
 app.get("/", (req, res) => {
     res.json({ 
         message: "서버 실행 중",
         status: {
             database: dbConnection ? "연결됨" : "연결 안됨",
-            gpt_lambda_url: process.env.GPT_LAMBDA_URL ? "설정됨" : "설정 안됨",
+            gemini_lambda_url: process.env.GEMINI_LAMBDA_URL ? "설정됨" : "설정 안됨",
             claude_lambda_url: process.env.BEDROCK_LAMBDA_URL ? "설정됨" : "설정 안됨"
         }
     });
@@ -203,7 +204,7 @@ app.delete("/notes", checkDbConnection, async (req, res) => {
 
     dbConnection.query(sql, (err, result) => {
         if (err) {
-            console.error('전체 메모 삭제 중 오류:', error);
+            console.error('전체 메모 삭제 중 오류:', err);
             return res.status(500).json({ error: "전체 메모 삭제 실패" });
         }
 
@@ -214,40 +215,40 @@ app.delete("/notes", checkDbConnection, async (req, res) => {
     });
 });
 
-// GPT 조언 요청 처리
-app.post("/gpt-notes", checkDbConnection, async (req, res) => {
+// Gemini 조언 요청 처리 (GPT에서 변경)
+app.post("/gemini-notes", checkDbConnection, async (req, res) => {
     const { content, noteId } = req.body;
 
     if (!content?.trim() || !noteId) {
         return res.status(400).json({ error: "내용과 노트 ID가 필요합니다" });
     }
 
-    if (!process.env.GPT_LAMBDA_URL) {
+    if (!process.env.GEMINI_LAMBDA_URL) {
         return res.status(503).json({ 
-            error: "GPT 서비스 사용 불가",
-            message: "현재 GPT 서비스를 사용할 수 없습니다. Lambda URL 설정을 확인해주세요."
+            error: "Gemini 서비스 사용 불가",
+            message: "현재 Gemini 서비스를 사용할 수 없습니다. Lambda URL 설정을 확인해주세요."
         });
     }
 
     try {
-        console.log('GPT Lambda 함수 호출 중...');
-        const aiResponse = await callGPTLambda(content, noteId);
-        console.log('GPT Lambda 함수 호출 완료');
+        console.log('Gemini Lambda 함수 호출 중...');
+        const aiResponse = await callGeminiLambda(content, noteId);
+        console.log('Gemini Lambda 함수 호출 완료');
 
-        // DB에 AI 응답 저장
-        const updateSql = "UPDATE notes SET ai_note = ?, ai_type = 'gpt' WHERE id = ?";
+        // DB에 AI 응답 저장 (ai_type을 gemini로 변경)
+        const updateSql = "UPDATE notes SET ai_note = ?, ai_type = 'gemini' WHERE id = ?";
         dbConnection.query(updateSql, [aiResponse, noteId], (err, result) => {
             if (err) {
                 console.error('AI 응답 저장 중 오류:', err);
                 return res.status(500).json({ error: "AI 응답 저장 실패" });
             }
             
-            res.json({ message: "GPT 분석 요청이 처리되었습니다" });
+            res.json({ message: "Gemini 분석 요청이 처리되었습니다" });
         });
     } catch (error) {
-        console.error('GPT 조언 요청 처리 중 오류:', error);
+        console.error('Gemini 조언 요청 처리 중 오류:', error);
         res.status(500).json({ 
-            error: "GPT 서비스 처리 실패",
+            error: "Gemini 서비스 처리 실패",
             message: "잠시 후 다시 시도해주세요"
         });
     }
@@ -303,7 +304,7 @@ process.on('unhandledRejection', (error) => {
     process.exit(1);
 });
 
-// 서버 시작
+// 서버 시작 (로그 메시지 변경)
 const startServer = async () => {
     try {
         await connectToDatabase();
@@ -311,9 +312,9 @@ const startServer = async () => {
         app.listen(port, () => {
             console.log('\n=== 서버 상태 ===');
             console.log(`포트: ${port}`);
-            console.log(`GPT Lambda URL: ${process.env.GPT_LAMBDA_URL ? '설정됨 ✅' : '설정 안됨 ⚠️'}`);
+            console.log(`Gemini Lambda URL: ${process.env.GEMINI_LAMBDA_URL ? '설정됨 ✅' : '설정 안됨 ⚠️'}`);
             console.log(`Claude Lambda URL: ${process.env.BEDROCK_LAMBDA_URL ? '설정됨 ✅' : '설정 안됨 ⚠️'}`);
-            if (!process.env.GPT_LAMBDA_URL || !process.env.BEDROCK_LAMBDA_URL) {
+            if (!process.env.GEMINI_LAMBDA_URL || !process.env.BEDROCK_LAMBDA_URL) {
                 console.log('※ Lambda URL이 설정되지 않은 AI 기능은 사용할 수 없습니다.');
             }
             console.log('=================\n');
