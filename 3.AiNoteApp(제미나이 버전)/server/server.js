@@ -144,7 +144,7 @@ app.post("/notes", checkDbConnection, checkGeminiConfig, async (req, res) => {
   }
 
   try {
-    const prompt = `당신은 AWS 전문가입니다. 사용자가 제공한 데이터를 바탕으로 추가로 학습할 수 있는 AWS 서비스 하나를 제안해주세요. 응답은 최소 3문장 이상이어야 하며 한국어로 작성해주세요.
+    const prompt = `You are an expert in AWS. Based on the data provided by the user, suggest one AWS service that the user can additionally learn. Ensure the response is at least three sentences long and in Korean.
 
 사용자 입력: ${userMessage}`;
 

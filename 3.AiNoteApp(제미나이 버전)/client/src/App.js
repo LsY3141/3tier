@@ -8,6 +8,7 @@ function App() {
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchNotes();
@@ -17,11 +18,27 @@ function App() {
 
   const fetchNotes = async () => {
     try {
+      setError(null);
       const response = await fetch(`${SERVER_URL}/notes`);
+      
+      if (!response.ok) {
+        throw new Error(`서버 오류: ${response.status} ${response.statusText}`);
+      }
+      
       const data = await response.json();
-      setNotes(data);
+      
+      // 데이터가 배열인지 확인
+      if (Array.isArray(data)) {
+        setNotes(data);
+      } else {
+        console.error("서버에서 배열이 아닌 데이터를 받았습니다:", data);
+        setNotes([]);
+        setError("서버에서 올바르지 않은 데이터 형식을 받았습니다.");
+      }
     } catch (error) {
       console.error("노트 조회 중 오류 발생:", error);
+      setNotes([]); // 오류 시 빈 배열로 설정
+      setError(`노트를 불러올 수 없습니다: ${error.message}`);
     }
   };
 
@@ -64,7 +81,6 @@ function App() {
     }
   };
 
-  // 💡 수정 필요: requestAIAdvice 함수가 있다면 이 부분의 엔드포인트도 확인 필요
   const requestAIAdvice = async (userNote) => {
     try {
       await fetch(`${SERVER_URL}/ainotes`, {
@@ -110,10 +126,10 @@ function App() {
 
         <h2>내 학습 기록</h2>
         <div className="notes-container">
-          {notes.length === 0 ? (
+          {Array.isArray(notes) && notes.length === 0 ? (
             <p className="no-notes">아직 기록된 학습 내용이 없습니다.</p>
           ) : (
-            notes.map((note) => (
+            Array.isArray(notes) && notes.map((note) => (
               <div key={note.id} className="note">
                 <div className="note-content">
                   <strong>📝 학습 내용:</strong> 
@@ -122,7 +138,7 @@ function App() {
                 {note.ai_note && (
                   <div className="ai-note">
                     <strong>
-                      {note.ai_type === 'gemini' ? '🤖 AI 추천 학습:' : '🤖 AI 추천 학습:'}
+                      {note.ai_type === 'gemini' ? '🤖 Gemini 추천 학습:' : '🤖 Gemini 추천 학습:'}
                     </strong>
                     <p>{note.ai_note}</p>
                   </div>

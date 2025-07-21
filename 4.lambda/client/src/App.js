@@ -19,10 +19,23 @@ function App() {
   const fetchNotes = async () => {
     try {
       const response = await fetch(`${SERVER_URL}/notes`);
+      
+      if (!response.ok) {
+        throw new Error(`서버 오류: ${response.status} ${response.statusText}`);
+      }
+      
       const data = await response.json();
-      setNotes(data);
+      
+      // 데이터가 배열인지 확인
+      if (Array.isArray(data)) {
+        setNotes(data);
+      } else {
+        console.error("서버에서 배열이 아닌 데이터를 받았습니다:", data);
+        setNotes([]);
+      }
     } catch (error) {
       console.error("노트 조회 중 오류 발생:", error);
+      setNotes([]); // 오류 시 빈 배열로 설정
     }
   };
 
@@ -163,10 +176,10 @@ function App() {
 
         <h2>내 학습 기록</h2>
         <div className="notes-container">
-          {notes.length === 0 ? (
+          {Array.isArray(notes) && notes.length === 0 ? (
             <p className="no-notes">아직 기록된 학습 내용이 없습니다.</p>
           ) : (
-            notes.map((note) => {
+            Array.isArray(notes) && notes.map((note) => {
               const aiInfo = getAIDisplayInfo(note.ai_type);
               const isRequestingAI = aiRequestInProgress.id === note.id;
               
